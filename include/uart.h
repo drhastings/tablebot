@@ -7,7 +7,7 @@
 
 #define sendLn() send("\n",1)
 
-void initUART();
+void initUART(uint8_t rate);
 
 uint8_t send(char * message, uint8_t length);
 uint8_t sendInt(int32_t number);

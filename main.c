@@ -17,8 +17,19 @@ uint8_t stopped = 1;
 char input_buffer[16];
 
 float target_heading, last_heading;
+float new_target;
 
-float turn_to;
+uint8_t scanning = 0;
+float scan_to;
+int8_t scan_direction;
+
+uint8_t shortest = 255;
+uint8_t last_reading;
+
+float near, far;
+
+float table_edge, last_edge;
+uint8_t found_an_edge = 0, ready_to_scan = 0;
 
 uint8_t turning;
 uint16_t reversing;
@@ -49,7 +60,7 @@ float normalized_difference(const float angle_a, const float angle_b);
 int main()
 {
   // Start serial
-  initUART();
+  initUART(10);
   // Start mpu
   initMPU();
   // Start system timer
@@ -207,12 +218,12 @@ int main()
         target_speed = -120;
         target_rotational_velocity = 0;
       }
-      else if (!front_left)
+      else if (!front_left || results[2] > 170)
       {
         target_speed = -110;
         target_rotational_velocity = -.005;
       }
-      else if (!front_right)
+      else if (!front_right || results[3] > 170)
       {
         target_speed = -110;
         target_rotational_velocity = .005;
@@ -221,7 +232,28 @@ int main()
       {
         target_speed = 0;
         target_rotational_velocity = 0;
-        reversing = 200;
+        reversing = 150;
+        
+        table_edge = normalized_difference(heading, M_PI /2);
+
+        float angle_diff = fabs(normalized_difference(table_edge, last_edge));
+
+        if (!found_an_edge)
+        {
+          found_an_edge = 1;
+
+          last_edge = table_edge;
+        }
+        else if (angle_diff > M_PI / 3 && angle_diff < 2 * M_PI / 3)
+        {
+          ready_to_scan = 1;
+
+          near = 0;
+
+          far = 0;
+
+          found_an_edge = 0;
+        }
       }
       else if (reversing)
       {
@@ -231,6 +263,74 @@ int main()
         if (!reversing)
         {
           target_heading = normalized_difference(heading, M_PI / 2);
+
+          if (ready_to_scan)
+          {
+            ready_to_scan = 0;
+
+            target_heading = normalized_difference(target_heading, -M_PI / 4);
+
+            scan_to = normalized_difference(target_heading, M_PI);
+
+            scan_direction = -1;
+
+            scanning = 1;
+          }
+        }
+      }
+      else if (scanning)
+      {
+        if (fabs(normalized_difference(target_heading, scan_to)) < 0.004)
+        {
+          if (new_target)
+          {
+            target_heading = new_target;
+          }
+          
+          new_target = 0;
+
+          shortest = 255;
+
+          scanning = 0;
+        }
+        else
+        {
+          target_speed = 70;
+          target_rotational_velocity = 0.001 * scan_direction;
+
+//          sendInt(results[0]);
+//          sendLn();
+
+          int16_t deriv = results[0] - last_reading;
+
+          if (results[0] < shortest && deriv < -3 && fabs(normalized_difference( heading, target_heading)) < 0.2)
+          {
+            far = 0;
+
+            near = heading;
+
+            shortest = results[0];
+
+            send("near: ", 6);
+            sendFloat(heading);
+            sendLn();
+          }
+
+          if (!far && near && deriv > 3)
+          {
+            far = heading;
+
+            send("far: ", 5);
+            sendFloat(heading);
+            sendLn();
+            new_target = (near + far) / 2;
+            if (fabs(near - far) > M_PI)
+            {
+              new_target -= M_PI;
+            }
+          }
+
+          last_reading = results[0];
         }
       }
       else

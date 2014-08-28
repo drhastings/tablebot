@@ -14,7 +14,7 @@ volatile statusReg reg;
 volatile char buffer[256];
 volatile char inBuffer[256];
 
-void initUART()
+void initUART(uint8_t rate)
 {
   reg.sending = 0;
   reg.index = 0;
@@ -23,7 +23,7 @@ void initUART()
   reg.inLength = 0;
   reg.incoming = 0;
   UBRR0H = 0;
-  UBRR0L = (unsigned char)129;
+  UBRR0L = (unsigned char)rate;
   UCSR0B = 1<<RXEN0 | 1<<TXEN0 | 1<<TXCIE0 | (1<<RXCIE0);
   UCSR0C = 0<<USBS0 | 3<<UCSZ00;
 }
@@ -33,7 +33,7 @@ uint8_t send(char * message, uint8_t length)
   uint8_t x;
   for (x = 0; x < length; x++)
   {
-    buffer[(uint8_t) x + reg.length] = message[x];
+    buffer[(uint8_t) (x + reg.length)] = message[x];
   }
 //  reg.index = 0;
   reg.length += length;
